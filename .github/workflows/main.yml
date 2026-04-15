@@ -2,7 +2,7 @@ name: Build ARM64 .so
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
@@ -10,27 +10,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      # Gunakan v4 agar tidak dideprecated
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
-      - name: Install NDK r25c
-        run: |
-          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
-          unzip -q android-ndk-r25c-linux.zip
-          echo "NDK=$PWD/android-ndk-r25c" >> $GITHUB_ENV
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant Execute Permission
+        run: chmod +x gradlew
+
+      # Daripada pakai clang++ manual yang ribet ngatur include-nya, 
+      # lebih baik biarkan Gradle yang urus build .so nya saja.
+      - name: Compile Native Libraries
+        run: ./gradlew assembleDebug
 
       - name: Create output dir
         run: mkdir -p output
 
-      - name: Compile ARM64 .so
+      # Mengambil file .so hasil compile dari folder build Gradle
+      - name: Copy Compiled .so
         run: |
-          $NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang++ \
-            -shared -fPIC \
-            -o output/mod.so \
-            src/main.cpp \
-            -llog
+          cp app/build/intermediates/cmake/debug/obj/arm64-v8a/libMyModName.so output/mod.so || cp app/build/intermediates/cmake/debug/obj/arm64-v8a/*.so output/mod.so
 
       - name: Upload .so artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pixelworld-mod
           path: output/mod.so
+          
